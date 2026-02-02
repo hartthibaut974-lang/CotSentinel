@@ -1,0 +1,459 @@
+{% extends "base.html" %}
+
+{% block title %}Certificates - CoT Server Admin{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 2rem;">🔐 Certificate Management</h1>
+
+<div class="card">
+    <h2>Generate New Certificate</h2>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Generate and manage client certificates for TAK devices.
+    </p>
+
+    <button class="btn btn-success" onclick="showModal('generate-cert-modal')">
+        ➕ Generate New Certificate
+    </button>
+</div>
+
+<div class="card">
+    <h2>Active Certificates</h2>
+    <div id="certs-loading" class="loading">Loading certificates...</div>
+    <div id="certs-content" style="display: none;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Size</th>
+                    <th>Modified</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="certs-table-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2>🚫 Revoked Certificates</h2>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Certificates that have been revoked will no longer be accepted by the TAK Server.
+    </p>
+    <div id="revoked-loading" class="loading">Loading...</div>
+    <div id="revoked-content" style="display: none;">
+        <div id="revoked-list"></div>
+    </div>
+    <div style="margin-top: 1rem;">
+        <button class="btn" onclick="downloadCRL()">⬇️ Download CRL</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>📋 Certificate Information</h2>
+    <div class="alert alert-info">
+        <strong>Certificate Types:</strong>
+        <ul style="margin: 0.5rem 0 0 1.5rem;">
+            <li><strong>.crt</strong> - Certificate file</li>
+            <li><strong>.key</strong> - Private key file (keep secure!)</li>
+            <li><strong>.p12</strong> - PKCS12 bundle (recommended for clients)</li>
+        </ul>
+        <p style="margin-top: 0.5rem;">
+            For client devices, download the <strong>.p12</strong> file and install it on your device. 
+            Check <code>/opt/tak/.credentials</code> for the certificate password.
+        </p>
+    </div>
+</div>
+
+<!-- Generate Certificate Modal -->
+<div id="generate-cert-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Generate New Certificate</h2>
+            <span class="modal-close" onclick="hideModal('generate-cert-modal')">&times;</span>
+        </div>
+        <form id="generate-cert-form">
+            <div class="form-group">
+                <label for="client-name">Client Name</label>
+                <input type="text" id="client-name" name="client-name" 
+                       placeholder="e.g., user1, device1, team-alpha" required>
+                <small style="color: #666;">Use alphanumeric characters, hyphens, and underscores only.</small>
+            </div>
+            <div class="button-group">
+                <button type="submit" class="btn btn-success">Generate</button>
+                <button type="button" class="btn btn-secondary" onclick="hideModal('generate-cert-modal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Revoke Certificate Modal -->
+<div id="revoke-cert-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>🚫 Revoke Certificate</h2>
+            <span class="modal-close" onclick="hideModal('revoke-cert-modal')">&times;</span>
+        </div>
+        <div class="alert alert-warning">
+            <strong>Warning:</strong> Revoking a certificate will prevent it from connecting to the TAK Server.
+            This action can be undone, but clients will need to be re-issued certificates.
+        </div>
+        <form id="revoke-cert-form">
+            <input type="hidden" id="revoke-cert-name">
+            <div class="form-group">
+                <label for="revoke-reason">Reason for Revocation</label>
+                <select id="revoke-reason" class="form-control">
+                    <option value="unspecified">Unspecified</option>
+                    <option value="keyCompromise">Key Compromise</option>
+                    <option value="affiliationChanged">Affiliation Changed</option>
+                    <option value="superseded">Superseded (Replaced)</option>
+                    <option value="cessationOfOperation">Cessation of Operation</option>
+                    <option value="certificateHold">Certificate Hold (Temporary)</option>
+                </select>
+            </div>
+            <p id="revoke-cert-display" style="margin: 1rem 0; font-weight: 600;"></p>
+            <div class="button-group">
+                <button type="submit" class="btn btn-danger">Revoke Certificate</button>
+                <button type="button" class="btn btn-secondary" onclick="hideModal('revoke-cert-modal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .form-control {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 1rem;
+    }
+    
+    .btn-danger {
+        background: #d32f2f;
+    }
+    
+    .btn-danger:hover {
+        background: #b71c1c;
+    }
+    
+    .cert-type-badge {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .cert-type-crt { background: #e3f2fd; color: #1565c0; }
+    .cert-type-key { background: #fff3e0; color: #e65100; }
+    .cert-type-p12 { background: #e8f5e9; color: #2e7d32; }
+    .cert-type-pem { background: #f3e5f5; color: #7b1fa2; }
+    
+    .revoked-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+        background: #fff5f5;
+    }
+    
+    .revoked-item:last-child {
+        border-bottom: none;
+    }
+    
+    .revoked-icon {
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        color: #d32f2f;
+    }
+    
+    .revoked-info {
+        flex: 1;
+    }
+    
+    .revoked-name {
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .revoked-meta {
+        font-size: 0.85rem;
+        color: #666;
+    }
+    
+    .revoked-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .btn-sm {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.85rem;
+    }
+    
+    .empty-revoked {
+        text-align: center;
+        padding: 2rem;
+        color: #666;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .btn-icon {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.9rem;
+        background: #f0f0f0;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .btn-icon:hover {
+        background: #e0e0e0;
+    }
+    
+    .btn-icon.danger:hover {
+        background: #ffe0e0;
+        color: #d32f2f;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadCertificates() {
+        try {
+            const response = await fetch('/api/certs/list');
+            const data = await response.json();
+
+            if (data.success) {
+                const tbody = document.getElementById('certs-table-body');
+                tbody.innerHTML = '';
+
+                // Filter out CA certs and group by base name
+                const clientCerts = {};
+                data.certificates.forEach(cert => {
+                    if (cert.name.startsWith('ca.') || cert.name.startsWith('ca-')) return;
+                    
+                    const baseName = cert.name.replace(/\.(crt|key|p12|pem)$/, '');
+                    if (!clientCerts[baseName]) {
+                        clientCerts[baseName] = [];
+                    }
+                    clientCerts[baseName].push(cert);
+                });
+
+                if (Object.keys(clientCerts).length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666;">No client certificates found</td></tr>';
+                } else {
+                    // Show each certificate file
+                    data.certificates.forEach(cert => {
+                        const row = document.createElement('tr');
+                        const modified = new Date(cert.modified).toLocaleString();
+                        const ext = cert.name.split('.').pop().toLowerCase();
+                        const baseName = cert.name.replace(/\.(crt|key|p12|pem)$/, '');
+                        const isCA = cert.name.startsWith('ca.') || cert.name.startsWith('ca-');
+                        
+                        row.innerHTML = `
+                            <td>${cert.name}</td>
+                            <td><span class="cert-type-badge cert-type-${ext}">.${ext}</span></td>
+                            <td>${formatFileSize(cert.size)}</td>
+                            <td>${modified}</td>
+                            <td class="action-buttons">
+                                <button class="btn-icon" onclick="downloadCert('${cert.name}')" title="Download">⬇️</button>
+                                ${!isCA && ext === 'crt' ? `<button class="btn-icon danger" onclick="showRevokeModal('${cert.name}')" title="Revoke">🚫</button>` : ''}
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+
+                document.getElementById('certs-loading').style.display = 'none';
+                document.getElementById('certs-content').style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error loading certificates:', error);
+            showAlert('Failed to load certificates', 'error');
+        }
+    }
+
+    async function loadRevokedCertificates() {
+        try {
+            const response = await fetch('/api/certs/revoked');
+            const data = await response.json();
+
+            document.getElementById('revoked-loading').style.display = 'none';
+            document.getElementById('revoked-content').style.display = 'block';
+
+            const container = document.getElementById('revoked-list');
+
+            if (data.success && data.revoked.length > 0) {
+                let html = '';
+                data.revoked.forEach(cert => {
+                    const revokedDate = new Date(cert.revoked_at).toLocaleString();
+                    html += `
+                        <div class="revoked-item">
+                            <div class="revoked-icon">🚫</div>
+                            <div class="revoked-info">
+                                <div class="revoked-name">${cert.name}</div>
+                                <div class="revoked-meta">
+                                    Serial: ${cert.serial} • Reason: ${cert.reason} • Revoked: ${revokedDate}
+                                </div>
+                            </div>
+                            <div class="revoked-actions">
+                                <button class="btn btn-sm" onclick="unrevokeCert('${cert.name}')">
+                                    ↩️ Restore
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = `
+                    <div class="empty-revoked">
+                        <p>✅ No revoked certificates</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading revoked certificates:', error);
+        }
+    }
+
+    async function generateCertificate(clientName) {
+        try {
+            const response = await fetch('/api/certs/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    client_name: clientName
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('Certificate generated successfully for ' + clientName, 'success');
+                hideModal('generate-cert-modal');
+                document.getElementById('client-name').value = '';
+                loadCertificates();
+                
+                // Show download options
+                const p12File = data.files.p12;
+                showAlert(`Download the ${p12File} file for client installation`, 'info');
+            } else {
+                showAlert('Failed to generate certificate: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error generating certificate:', error);
+            showAlert('Failed to generate certificate', 'error');
+        }
+    }
+
+    function showRevokeModal(certName) {
+        document.getElementById('revoke-cert-name').value = certName;
+        document.getElementById('revoke-cert-display').textContent = `Certificate: ${certName}`;
+        document.getElementById('revoke-reason').value = 'unspecified';
+        showModal('revoke-cert-modal');
+    }
+
+    async function revokeCertificate(certName, reason) {
+        try {
+            const response = await fetch('/api/certs/revoke', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    cert_name: certName,
+                    reason: reason
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert(`Certificate ${certName} has been revoked`, 'success');
+                hideModal('revoke-cert-modal');
+                loadCertificates();
+                loadRevokedCertificates();
+            } else {
+                showAlert('Failed to revoke certificate: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error revoking certificate:', error);
+            showAlert('Failed to revoke certificate', 'error');
+        }
+    }
+
+    async function unrevokeCert(certName) {
+        if (!confirm(`Restore certificate "${certName}"?\n\nThis will allow it to connect to the server again.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/certs/unrevoke', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    cert_name: certName
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert(`Certificate ${certName} has been restored`, 'success');
+                loadCertificates();
+                loadRevokedCertificates();
+            } else {
+                showAlert('Failed to restore certificate: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error restoring certificate:', error);
+            showAlert('Failed to restore certificate', 'error');
+        }
+    }
+
+    function downloadCert(filename) {
+        window.location.href = `/api/certs/download/${encodeURIComponent(filename)}`;
+    }
+
+    function downloadCRL() {
+        window.location.href = '/api/certs/crl';
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    document.getElementById('generate-cert-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const clientName = document.getElementById('client-name').value;
+        await generateCertificate(clientName);
+    });
+
+    document.getElementById('revoke-cert-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const certName = document.getElementById('revoke-cert-name').value;
+        const reason = document.getElementById('revoke-reason').value;
+        await revokeCertificate(certName, reason);
+    });
+
+    // Load certificates on page load
+    loadCertificates();
+    loadRevokedCertificates();
+</script>
+{% endblock %}

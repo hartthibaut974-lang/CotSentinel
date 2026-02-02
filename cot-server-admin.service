@@ -1,0 +1,17 @@
+[Unit]
+Description=CoT Server Admin - Administration Tool for TAK Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/cot-server-admin
+Environment="PATH=/opt/cot-server-admin/venv/bin"
+ExecStart=/opt/cot-server-admin/venv/bin/python3 /opt/cot-server-admin/cot_server_admin.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

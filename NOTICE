@@ -1,0 +1,41 @@
+TAK Sentinel
+Copyright 2024-2025 BlackDot Technology LLC
+
+This product includes software developed by BlackDot Technology LLC
+(https://blackdottech.com).
+
+================================================================================
+
+THIRD-PARTY NOTICES
+
+This software uses the following open-source components:
+
+Flask - BSD-3-Clause License
+Copyright 2010 Pallets
+
+Flask-Login - MIT License
+Copyright 2011 Matthew Frazier
+
+Werkzeug - BSD-3-Clause License
+Copyright 2007 Pallets
+
+psycopg2 - GNU Lesser General Public License v3.0
+Copyright 2001-2021 Federico Di Gregorio, Daniele Varrazzo
+
+qrcode - BSD License
+Copyright 2011 Lincoln Loop
+
+================================================================================
+
+DISCLAIMER
+
+This software is not affiliated with, endorsed by, or connected to the TAK
+Product Center, U.S. Department of Defense, U.S. Air Force Research Laboratory,
+or any other U.S. Government agency.
+
+"TAK" (Team Awareness Kit / Tactical Assault Kit), "ATAK" (Android Team
+Awareness Kit), "WinTAK", "iTAK", and related names are products of the
+U.S. Government.
+
+TAK Sentinel is an independent, open-source administration tool designed to
+work with TAK Server software.

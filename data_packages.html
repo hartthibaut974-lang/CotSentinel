@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+
+{% block title %}Data Packages - CoT Server Admin{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 2rem;">📦 Data Packages</h1>
+
+<div class="card">
+    <h2>Upload Data Package</h2>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Upload data packages (.zip or .dpk) containing maps, overlays, configurations, or other resources for TAK clients.
+    </p>
+    
+    <div class="upload-area" id="uploadArea">
+        <div class="upload-icon">📁</div>
+        <p>Drag and drop a file here, or click to select</p>
+        <p style="font-size: 0.85rem; color: #888;">Supported formats: .zip, .dpk (max 100MB)</p>
+        <input type="file" id="fileInput" accept=".zip,.dpk" style="display: none;">
+    </div>
+    
+    <div id="uploadProgress" style="display: none; margin-top: 1rem;">
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <p id="uploadStatus" style="text-align: center; margin-top: 0.5rem;"></p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Available Packages</h2>
+    <div id="packagesList">
+        <div class="loading">Loading packages...</div>
+    </div>
+</div>
+
+<!-- Package Details Modal -->
+<div id="packageModal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+        <h3 id="modalPackageName">Package Contents</h3>
+        <div id="packageContents" style="max-height: 400px; overflow-y: auto; margin: 1rem 0;">
+            <div class="loading">Loading contents...</div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn" onclick="hideModal('packageModal')">Close</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .upload-area {
+        border: 2px dashed #ccc;
+        border-radius: 8px;
+        padding: 3rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        background: #fafafa;
+    }
+    
+    .upload-area:hover,
+    .upload-area.dragover {
+        border-color: #667eea;
+        background: #f0f3ff;
+    }
+    
+    .upload-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .progress-bar {
+        height: 8px;
+        background: #e0e0e0;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        width: 0%;
+        transition: width 0.3s;
+    }
+    
+    .package-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+        transition: background 0.2s;
+    }
+    
+    .package-item:hover {
+        background: #f8f9fa;
+    }
+    
+    .package-item:last-child {
+        border-bottom: none;
+    }
+    
+    .package-icon {
+        font-size: 2rem;
+        margin-right: 1rem;
+    }
+    
+    .package-info {
+        flex: 1;
+    }
+    
+    .package-name {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 0.25rem;
+    }
+    
+    .package-meta {
+        font-size: 0.85rem;
+        color: #666;
+    }
+    
+    .package-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .btn-icon {
+        padding: 0.5rem;
+        border: none;
+        background: #f0f0f0;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: all 0.2s;
+    }
+    
+    .btn-icon:hover {
+        background: #e0e0e0;
+    }
+    
+    .btn-icon.danger:hover {
+        background: #ffe0e0;
+        color: #d32f2f;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #888;
+    }
+    
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+    
+    .file-list {
+        font-family: monospace;
+        font-size: 0.85rem;
+        background: #f5f5f5;
+        padding: 0.5rem;
+        border-radius: 4px;
+    }
+    
+    .file-list-item {
+        padding: 0.25rem 0.5rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .file-list-item:last-child {
+        border-bottom: none;
+    }
+    
+    .file-list-item.directory {
+        color: #1976d2;
+        font-weight: 600;
+    }
+</style>
+
+<script>
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const progressFill = document.getElementById('progressFill');
+    const uploadStatus = document.getElementById('uploadStatus');
+    
+    // Load packages on page load
+    document.addEventListener('DOMContentLoaded', loadPackages);
+    
+    // Upload area click handler
+    uploadArea.addEventListener('click', () => fileInput.click());
+    
+    // Drag and drop handlers
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            uploadFile(files[0]);
+        }
+    });
+    
+    // File input change handler
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            uploadFile(e.target.files[0]);
+        }
+    });
+    
+    function uploadFile(file) {
+        // Validate file type
+        const validTypes = ['.zip', '.dpk'];
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (!validTypes.includes(ext)) {
+            showAlert('Invalid file type. Only .zip and .dpk files allowed.', 'error');
+            return;
+        }
+        
+        // Validate file size (100MB max)
+        if (file.size > 100 * 1024 * 1024) {
+            showAlert('File too large. Maximum size is 100MB.', 'error');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        uploadProgress.style.display = 'block';
+        progressFill.style.width = '0%';
+        uploadStatus.textContent = 'Uploading...';
+        
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percent = (e.loaded / e.total) * 100;
+                progressFill.style.width = percent + '%';
+                uploadStatus.textContent = `Uploading... ${Math.round(percent)}%`;
+            }
+        });
+        
+        xhr.addEventListener('load', () => {
+            if (xhr.status === 200) {
+                const response = JSON.parse(xhr.responseText);
+                if (response.success) {
+                    showAlert(`Package uploaded: ${response.filename}`, 'success');
+                    loadPackages();
+                } else {
+                    showAlert(response.error || 'Upload failed', 'error');
+                }
+            } else {
+                showAlert('Upload failed', 'error');
+            }
+            uploadProgress.style.display = 'none';
+            fileInput.value = '';
+        });
+        
+        xhr.addEventListener('error', () => {
+            showAlert('Upload failed - network error', 'error');
+            uploadProgress.style.display = 'none';
+        });
+        
+        xhr.open('POST', '/api/data-packages/upload');
+        xhr.send(formData);
+    }
+    
+    function loadPackages() {
+        fetch('/api/data-packages/list')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    renderPackages(data.packages);
+                } else {
+                    document.getElementById('packagesList').innerHTML = 
+                        '<div class="alert alert-error">Failed to load packages</div>';
+                }
+            })
+            .catch(err => {
+                document.getElementById('packagesList').innerHTML = 
+                    '<div class="alert alert-error">Error loading packages</div>';
+            });
+    }
+    
+    function renderPackages(packages) {
+        const container = document.getElementById('packagesList');
+        
+        if (packages.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📦</div>
+                    <p>No data packages uploaded yet</p>
+                    <p style="font-size: 0.9rem;">Upload a .zip or .dpk file to get started</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        packages.forEach(pkg => {
+            const date = new Date(pkg.modified).toLocaleString();
+            html += `
+                <div class="package-item">
+                    <div class="package-icon">📦</div>
+                    <div class="package-info">
+                        <div class="package-name">${pkg.filename}</div>
+                        <div class="package-meta">
+                            ${pkg.size_human} • ${pkg.file_count} files • ${date}
+                        </div>
+                    </div>
+                    <div class="package-actions">
+                        <button class="btn-icon" onclick="viewPackage('${pkg.filename}')" title="View Contents">
+                            📋
+                        </button>
+                        <button class="btn-icon" onclick="downloadPackage('${pkg.filename}')" title="Download">
+                            ⬇️
+                        </button>
+                        <button class="btn-icon danger" onclick="deletePackage('${pkg.filename}')" title="Delete">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+    
+    function viewPackage(filename) {
+        document.getElementById('modalPackageName').textContent = filename;
+        document.getElementById('packageContents').innerHTML = '<div class="loading">Loading...</div>';
+        showModal('packageModal');
+        
+        fetch(`/api/data-packages/contents/${encodeURIComponent(filename)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    let html = '<div class="file-list">';
+                    data.contents.forEach(file => {
+                        const icon = file.is_dir ? '📁' : '📄';
+                        const cls = file.is_dir ? 'directory' : '';
+                        const size = file.is_dir ? '' : ` (${formatSize(file.size)})`;
+                        html += `<div class="file-list-item ${cls}">${icon} ${file.name}${size}</div>`;
+                    });
+                    html += '</div>';
+                    document.getElementById('packageContents').innerHTML = html;
+                } else {
+                    document.getElementById('packageContents').innerHTML = 
+                        '<div class="alert alert-error">' + data.error + '</div>';
+                }
+            });
+    }
+    
+    function downloadPackage(filename) {
+        window.location.href = `/api/data-packages/download/${encodeURIComponent(filename)}`;
+    }
+    
+    function deletePackage(filename) {
+        if (!confirm(`Delete package "${filename}"?\n\nThis cannot be undone.`)) {
+            return;
+        }
+        
+        fetch(`/api/data-packages/delete/${encodeURIComponent(filename)}`, {
+            method: 'DELETE'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Package deleted', 'success');
+                loadPackages();
+            } else {
+                showAlert(data.error || 'Delete failed', 'error');
+            }
+        });
+    }
+    
+    function formatSize(bytes) {
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let i = 0;
+        while (bytes >= 1024 && i < units.length - 1) {
+            bytes /= 1024;
+            i++;
+        }
+        return bytes.toFixed(1) + ' ' + units[i];
+    }
+</script>
+{% endblock %}

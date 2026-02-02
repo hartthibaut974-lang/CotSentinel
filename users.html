@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Users - CoT Server Admin{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>User Management</h2>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Manage administrative users who can access this web interface.
+    </p>
+
+    <button class="btn btn-success" onclick="showModal('create-user-modal')">
+        ➕ Create New User
+    </button>
+</div>
+
+<div class="card">
+    <h2>Admin Users</h2>
+    <div id="users-loading" class="loading">Loading users...</div>
+    <div id="users-content" style="display: none;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="users-table-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Change Password</h2>
+    <form id="change-password-form">
+        <div class="form-group">
+            <label for="current-password">Current Password</label>
+            <input type="password" id="current-password" name="current-password" required>
+        </div>
+        <div class="form-group">
+            <label for="new-password">New Password</label>
+            <input type="password" id="new-password" name="new-password" required>
+        </div>
+        <div class="form-group">
+            <label for="confirm-password">Confirm New Password</label>
+            <input type="password" id="confirm-password" name="confirm-password" required>
+        </div>
+        <button type="submit" class="btn btn-success">🔒 Change Password</button>
+    </form>
+</div>
+
+<!-- Create User Modal -->
+<div id="create-user-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Create New User</h2>
+            <span class="modal-close" onclick="hideModal('create-user-modal')">&times;</span>
+        </div>
+        <form id="create-user-form">
+            <div class="form-group">
+                <label for="new-username">Username</label>
+                <input type="text" id="new-username" name="new-username" required>
+            </div>
+            <div class="form-group">
+                <label for="new-user-password">Password</label>
+                <input type="password" id="new-user-password" name="new-user-password" required>
+            </div>
+            <div class="form-group">
+                <label for="new-user-role">Role</label>
+                <select id="new-user-role" name="new-user-role">
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div class="button-group">
+                <button type="submit" class="btn btn-success">Create</button>
+                <button type="button" class="btn btn-secondary" onclick="hideModal('create-user-modal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadUsers() {
+        try {
+            const response = await fetch('/api/users/list');
+            const data = await response.json();
+
+            if (data.success) {
+                const tbody = document.getElementById('users-table-body');
+                tbody.innerHTML = '';
+
+                data.users.forEach(user => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${user.username}</td>
+                        <td><span class="status-badge status-running">${user.role}</span></td>
+                        <td>
+                            ${user.username !== 'admin' ? 
+                                `<button class="btn btn-danger" onclick="deleteUser('${user.username}')">🗑️ Delete</button>` : 
+                                '<em style="color: #666;">Protected</em>'}
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                document.getElementById('users-loading').style.display = 'none';
+                document.getElementById('users-content').style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error loading users:', error);
+            showAlert('Failed to load users', 'error');
+        }
+    }
+
+    async function createUser(username, password, role) {
+        try {
+            const response = await fetch('/api/users/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: username,
+                    password: password,
+                    role: role
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('User created successfully', 'success');
+                hideModal('create-user-modal');
+                loadUsers();
+            } else {
+                showAlert('Failed to create user: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error creating user:', error);
+            showAlert('Failed to create user', 'error');
+        }
+    }
+
+    async function deleteUser(username) {
+        if (!confirm(`Are you sure you want to delete user "${username}"?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/users/delete/${username}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('User deleted successfully', 'success');
+                loadUsers();
+            } else {
+                showAlert('Failed to delete user: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            showAlert('Failed to delete user', 'error');
+        }
+    }
+
+    document.getElementById('create-user-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('new-username').value;
+        const password = document.getElementById('new-user-password').value;
+        const role = document.getElementById('new-user-role').value;
+        await createUser(username, password, role);
+    });
+
+    document.getElementById('change-password-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+
+        if (newPassword !== confirmPassword) {
+            showAlert('Passwords do not match', 'error');
+            return;
+        }
+
+        showAlert('Password change functionality coming soon', 'info');
+    });
+
+    // Load users on page load
+    loadUsers();
+</script>
+{% endblock %}

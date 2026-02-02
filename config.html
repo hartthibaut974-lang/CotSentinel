@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - CoT Server Admin{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>TAK Server Configuration</h2>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Edit the TAK Server configuration file. Changes require a server restart to take effect.
+    </p>
+
+    <div id="config-loading" class="loading">Loading configuration...</div>
+    
+    <form id="config-form" style="display: none;">
+        <div class="form-group">
+            <label for="config-xml">CoreConfig.xml</label>
+            <textarea id="config-xml" name="config-xml" rows="25"></textarea>
+        </div>
+
+        <div class="alert alert-info">
+            <strong>Note:</strong> The configuration will be backed up before saving. Server must be restarted for changes to take effect.
+        </div>
+
+        <div class="button-group">
+            <button type="submit" class="btn btn-success">💾 Save Configuration</button>
+            <button type="button" class="btn btn-secondary" onclick="loadConfig()">🔄 Reload</button>
+            <button type="button" class="btn" onclick="validateXML()">✓ Validate XML</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Quick Configuration</h2>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Common configuration options (coming soon)
+    </p>
+    
+    <div class="form-group">
+        <label>Network Inputs</label>
+        <div id="network-inputs" style="padding: 1rem; background: #f8f9fa; border-radius: 4px;">
+            Loading...
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label>Database Connection</label>
+        <div id="database-config" style="padding: 1rem; background: #f8f9fa; border-radius: 4px;">
+            Loading...
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Configuration Backups</h2>
+    <p style="color: #666;">
+        Backups are automatically created when you save the configuration. You can restore from a backup if needed.
+    </p>
+    <button class="btn" onclick="listBackups()">📁 View Backups</button>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentConfig = null;
+
+    async function loadConfig() {
+        try {
+            const response = await fetch('/api/config/get');
+            const data = await response.json();
+
+            if (data.success) {
+                currentConfig = data.config;
+                document.getElementById('config-xml').value = data.config.raw_xml;
+                
+                // Display network inputs
+                const networkDiv = document.getElementById('network-inputs');
+                if (data.config.network && data.config.network.length > 0) {
+                    networkDiv.innerHTML = data.config.network.map(net => 
+                        `<div style="margin-bottom: 0.5rem;">
+                            <strong>${net.protocol.toUpperCase()}</strong> on port <strong>${net.port}</strong>
+                            ${net.auth ? `(Auth: ${net.auth})` : ''}
+                        </div>`
+                    ).join('');
+                } else {
+                    networkDiv.innerHTML = '<em>No network inputs configured</em>';
+                }
+
+                // Display database config
+                const dbDiv = document.getElementById('database-config');
+                if (data.config.repository && data.config.repository.url) {
+                    dbDiv.innerHTML = `
+                        <div><strong>URL:</strong> ${data.config.repository.url}</div>
+                        <div><strong>User:</strong> ${data.config.repository.username}</div>
+                        <div><strong>Enabled:</strong> ${data.config.repository.enabled}</div>
+                    `;
+                } else {
+                    dbDiv.innerHTML = '<em>Database not configured</em>';
+                }
+
+                document.getElementById('config-loading').style.display = 'none';
+                document.getElementById('config-form').style.display = 'block';
+            } else {
+                showAlert('Failed to load configuration: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error loading config:', error);
+            showAlert('Failed to load configuration', 'error');
+        }
+    }
+
+    async function saveConfig(xmlContent) {
+        try {
+            const response = await fetch('/api/config/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    raw_xml: xmlContent
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('Configuration saved successfully. Backup created at: ' + data.backup, 'success');
+                showAlert('Please restart the TAK Server for changes to take effect.', 'info');
+            } else {
+                showAlert('Failed to save configuration: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error saving config:', error);
+            showAlert('Failed to save configuration', 'error');
+        }
+    }
+
+    function validateXML() {
+        const xmlContent = document.getElementById('config-xml').value;
+        
+        try {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
+            
+            const parseError = xmlDoc.getElementsByTagName("parsererror");
+            if (parseError.length > 0) {
+                showAlert('XML validation failed: ' + parseError[0].textContent, 'error');
+            } else {
+                showAlert('XML is valid!', 'success');
+            }
+        } catch (error) {
+            showAlert('XML validation failed: ' + error.message, 'error');
+        }
+    }
+
+    function listBackups() {
+        showAlert('Backup listing functionality coming soon', 'info');
+    }
+
+    document.getElementById('config-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        if (!confirm('Are you sure you want to save this configuration? The current config will be backed up.')) {
+            return;
+        }
+
+        const xmlContent = document.getElementById('config-xml').value;
+        await saveConfig(xmlContent);
+    });
+
+    // Load config on page load
+    loadConfig();
+</script>
+{% endblock %}

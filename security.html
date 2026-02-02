@@ -1,0 +1,504 @@
+{% extends "base.html" %}
+
+{% block title %}Security - CoT Server Admin{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 2rem;">🛡️ Security</h1>
+
+<!-- Security Settings -->
+<div class="card">
+    <h2>⚙️ Security Settings</h2>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Current security configuration. Settings can be changed via environment variables.
+    </p>
+    <div id="securitySettings" class="settings-grid">
+        <div class="loading">Loading settings...</div>
+    </div>
+</div>
+
+<!-- Active Sessions -->
+<div class="card">
+    <h2>🔑 Active Sessions</h2>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Manage active user sessions. You can terminate sessions to force users to re-authenticate.
+    </p>
+    <div id="activeSessions">
+        <div class="loading">Loading sessions...</div>
+    </div>
+    <div class="button-group" style="margin-top: 1rem;">
+        <button class="btn" onclick="loadActiveSessions()">🔄 Refresh</button>
+        <button class="btn btn-warning" onclick="terminateOtherSessions()">
+            ⚠️ End All My Other Sessions
+        </button>
+    </div>
+</div>
+
+<!-- Account Lockouts -->
+<div class="card">
+    <h2>🔒 Account Lockouts</h2>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Accounts that are currently locked due to failed login attempts.
+    </p>
+    <div id="lockoutsList">
+        <div class="loading">Loading lockouts...</div>
+    </div>
+</div>
+
+<!-- Security Tips -->
+<div class="card">
+    <h2>💡 Security Best Practices</h2>
+    <div class="tips-grid">
+        <div class="tip-item">
+            <div class="tip-icon">🔐</div>
+            <div class="tip-content">
+                <h4>Use Strong Passwords</h4>
+                <p>Ensure all admin accounts use complex passwords with a mix of characters.</p>
+            </div>
+        </div>
+        <div class="tip-item">
+            <div class="tip-icon">🌐</div>
+            <div class="tip-content">
+                <h4>Enable HTTPS</h4>
+                <p>Always access the admin interface over HTTPS to encrypt data in transit.</p>
+            </div>
+        </div>
+        <div class="tip-item">
+            <div class="tip-icon">👁️</div>
+            <div class="tip-content">
+                <h4>Review Audit Logs</h4>
+                <p>Regularly check audit logs for suspicious activity or unauthorized access attempts.</p>
+            </div>
+        </div>
+        <div class="tip-item">
+            <div class="tip-icon">🔄</div>
+            <div class="tip-content">
+                <h4>Rotate Certificates</h4>
+                <p>Periodically regenerate client certificates and revoke unused ones.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+    }
+    
+    .setting-item {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .setting-label {
+        font-weight: 500;
+        color: #333;
+    }
+    
+    .setting-value {
+        font-family: monospace;
+        background: #e9ecef;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+    }
+    
+    .setting-hint {
+        font-size: 0.8rem;
+        color: #666;
+        margin-top: 0.25rem;
+    }
+    
+    .session-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+        transition: background 0.2s;
+    }
+    
+    .session-item:hover {
+        background: #f8f9fa;
+    }
+    
+    .session-item:last-child {
+        border-bottom: none;
+    }
+    
+    .session-item.current {
+        background: #e8f5e9;
+    }
+    
+    .session-icon {
+        font-size: 1.5rem;
+        margin-right: 1rem;
+    }
+    
+    .session-info {
+        flex: 1;
+    }
+    
+    .session-user {
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .session-meta {
+        font-size: 0.85rem;
+        color: #666;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 0.25rem;
+    }
+    
+    .session-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .current-badge {
+        background: #4caf50;
+        color: white;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        margin-left: 0.5rem;
+    }
+    
+    .lockout-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+        background: #fff5f5;
+    }
+    
+    .lockout-item:last-child {
+        border-bottom: none;
+    }
+    
+    .lockout-icon {
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        color: #d32f2f;
+    }
+    
+    .lockout-info {
+        flex: 1;
+    }
+    
+    .lockout-user {
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .lockout-meta {
+        font-size: 0.85rem;
+        color: #666;
+    }
+    
+    .lockout-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: #888;
+    }
+    
+    .btn-warning {
+        background: #ff9800;
+        color: white;
+    }
+    
+    .btn-warning:hover {
+        background: #f57c00;
+    }
+    
+    .btn-danger {
+        background: #d32f2f;
+        color: white;
+    }
+    
+    .btn-danger:hover {
+        background: #b71c1c;
+    }
+    
+    .btn-sm {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.85rem;
+    }
+    
+    .tips-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+    }
+    
+    .tip-item {
+        display: flex;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    
+    .tip-icon {
+        font-size: 2rem;
+    }
+    
+    .tip-content h4 {
+        margin: 0 0 0.5rem 0;
+        color: #333;
+    }
+    
+    .tip-content p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: #666;
+    }
+    
+    .env-hint {
+        font-family: monospace;
+        font-size: 0.75rem;
+        color: #888;
+        margin-top: 0.25rem;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSecuritySettings();
+        loadActiveSessions();
+        loadLockouts();
+    });
+    
+    function loadSecuritySettings() {
+        fetch('/api/security/settings')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    renderSettings(data.settings);
+                }
+            });
+    }
+    
+    function renderSettings(settings) {
+        const container = document.getElementById('securitySettings');
+        container.innerHTML = `
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Session Timeout</div>
+                    <div class="env-hint">TAK_SESSION_TIMEOUT</div>
+                </div>
+                <div class="setting-value">${settings.session_timeout_minutes} minutes</div>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Max Login Attempts</div>
+                    <div class="env-hint">TAK_MAX_LOGIN_ATTEMPTS</div>
+                </div>
+                <div class="setting-value">${settings.max_login_attempts}</div>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Lockout Duration</div>
+                    <div class="env-hint">TAK_LOGIN_LOCKOUT_MINUTES</div>
+                </div>
+                <div class="setting-value">${settings.login_lockout_minutes} minutes</div>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">Max Concurrent Sessions</div>
+                    <div class="env-hint">TAK_MAX_CONCURRENT_SESSIONS</div>
+                </div>
+                <div class="setting-value">${settings.max_concurrent_sessions}</div>
+            </div>
+        `;
+    }
+    
+    function loadActiveSessions() {
+        fetch('/api/sessions/active')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    renderSessions(data.sessions);
+                }
+            })
+            .catch(err => {
+                document.getElementById('activeSessions').innerHTML = 
+                    '<div class="alert alert-error">Failed to load sessions</div>';
+            });
+    }
+    
+    function renderSessions(sessions) {
+        const container = document.getElementById('activeSessions');
+        
+        if (sessions.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p>No active sessions</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        sessions.forEach(sess => {
+            const created = new Date(sess.created).toLocaleString();
+            const lastActivity = new Date(sess.last_activity).toLocaleString();
+            const expires = new Date(sess.expires).toLocaleString();
+            const currentClass = sess.is_current ? 'current' : '';
+            
+            html += `
+                <div class="session-item ${currentClass}">
+                    <div class="session-icon">${sess.is_current ? '🟢' : '🔵'}</div>
+                    <div class="session-info">
+                        <div class="session-user">
+                            ${sess.username}
+                            ${sess.is_current ? '<span class="current-badge">Current Session</span>' : ''}
+                        </div>
+                        <div class="session-meta">
+                            <span>📍 ${sess.ip_address}</span>
+                            <span>🖥️ ${sess.user_agent}</span>
+                        </div>
+                        <div class="session-meta">
+                            <span>Started: ${created}</span>
+                            <span>Last Activity: ${lastActivity}</span>
+                        </div>
+                    </div>
+                    <div class="session-actions">
+                        ${!sess.is_current ? `
+                            <button class="btn btn-danger btn-sm" onclick="terminateSession('${sess.full_session_id}')">
+                                ✖ End
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+    
+    function terminateSession(sessionId) {
+        if (!confirm('Terminate this session? The user will be logged out immediately.')) {
+            return;
+        }
+        
+        fetch('/api/sessions/terminate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                loadActiveSessions();
+            } else {
+                showAlert(data.error || 'Failed to terminate session', 'error');
+            }
+        });
+    }
+    
+    function terminateOtherSessions() {
+        if (!confirm('End all your other sessions? You will remain logged in on this device only.')) {
+            return;
+        }
+        
+        fetch('/api/sessions/terminate-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                loadActiveSessions();
+            } else {
+                showAlert(data.error || 'Failed to terminate sessions', 'error');
+            }
+        });
+    }
+    
+    function loadLockouts() {
+        fetch('/api/security/lockouts')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    renderLockouts(data.lockouts);
+                }
+            })
+            .catch(err => {
+                document.getElementById('lockoutsList').innerHTML = 
+                    '<div class="empty-state"><p>Unable to load lockouts</p></div>';
+            });
+    }
+    
+    function renderLockouts(lockouts) {
+        const container = document.getElementById('lockoutsList');
+        
+        if (lockouts.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p>✅ No accounts currently locked</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        lockouts.forEach(lockout => {
+            html += `
+                <div class="lockout-item">
+                    <div class="lockout-icon">🔒</div>
+                    <div class="lockout-info">
+                        <div class="lockout-user">${lockout.username}</div>
+                        <div class="lockout-meta">
+                            IP: ${lockout.ip_address} • 
+                            Locked for ${lockout.remaining_minutes} more minutes
+                        </div>
+                    </div>
+                    <div class="lockout-actions">
+                        <button class="btn btn-sm" onclick="clearLockout('${lockout.username}', '${lockout.ip_address}')">
+                            🔓 Unlock
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+    
+    function clearLockout(username, ipAddress) {
+        if (!confirm(`Unlock account for ${username}? They will be able to attempt login again.`)) {
+            return;
+        }
+        
+        fetch('/api/security/clear-lockout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, ip_address: ipAddress })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                loadLockouts();
+            } else {
+                showAlert(data.error || 'Failed to clear lockout', 'error');
+            }
+        });
+    }
+</script>
+{% endblock %}

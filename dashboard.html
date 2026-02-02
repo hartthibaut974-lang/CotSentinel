@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - CoT Server Admin{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>System Status</h2>
+    <div id="status-loading" class="loading">Loading status...</div>
+    <div id="status-content" style="display: none;">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="label">TAK Server</div>
+                <div class="value" id="tak-status">
+                    <span class="status-badge status-stopped">Checking...</span>
+                </div>
+                <div class="button-group" style="margin-top: 1rem;">
+                    <button class="btn btn-success" onclick="controlServer('start')">Start</button>
+                    <button class="btn btn-danger" onclick="controlServer('stop')">Stop</button>
+                    <button class="btn btn-secondary" onclick="controlServer('restart')">Restart</button>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="label">PostgreSQL</div>
+                <div class="value" id="pg-status">
+                    <span class="status-badge status-stopped">Checking...</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="label">Connected Clients</div>
+                <div class="value" id="connected-clients">0</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="label">System Uptime</div>
+                <div class="value" id="system-uptime" style="font-size: 1rem;">--</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Database Statistics</h2>
+    <div id="db-stats-loading" class="loading">Loading database statistics...</div>
+    <div id="db-stats-content" style="display: none;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody id="db-stats-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Quick Actions</h2>
+    <div class="button-group">
+        <a href="{{ url_for('config_page') }}" class="btn">⚙️ Configure Server</a>
+        <a href="{{ url_for('certificates_page') }}" class="btn">🔐 Generate Certificate</a>
+        <a href="{{ url_for('logs_page') }}" class="btn">📝 View Logs</a>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Recent Activity</h2>
+    <p style="color: #666;">Activity logging coming soon...</p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadSystemStatus() {
+        try {
+            const response = await fetch('/api/system/status');
+            const data = await response.json();
+
+            if (data.success) {
+                // Update TAK Server status
+                const takStatus = document.getElementById('tak-status');
+                if (data.tak_server.running) {
+                    takStatus.innerHTML = '<span class="status-badge status-running">Running</span>';
+                } else {
+                    takStatus.innerHTML = '<span class="status-badge status-stopped">Stopped</span>';
+                }
+
+                // Update PostgreSQL status
+                const pgStatus = document.getElementById('pg-status');
+                if (data.postgresql.running) {
+                    pgStatus.innerHTML = '<span class="status-badge status-running">Running</span>';
+                } else {
+                    pgStatus.innerHTML = '<span class="status-badge status-stopped">Stopped</span>';
+                }
+
+                // Update connected clients
+                document.getElementById('connected-clients').textContent = data.stats.connected_clients;
+
+                // Update system uptime
+                document.getElementById('system-uptime').textContent = data.system.uptime;
+
+                document.getElementById('status-loading').style.display = 'none';
+                document.getElementById('status-content').style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error loading system status:', error);
+            showAlert('Failed to load system status', 'error');
+        }
+    }
+
+    async function loadDatabaseStats() {
+        try {
+            const response = await fetch('/api/database/stats');
+            const data = await response.json();
+
+            if (data.success) {
+                const tbody = document.getElementById('db-stats-body');
+                tbody.innerHTML = '';
+
+                for (const [key, value] of Object.entries(data.stats)) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</td>
+                        <td>${value}</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+
+                document.getElementById('db-stats-loading').style.display = 'none';
+                document.getElementById('db-stats-content').style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error loading database stats:', error);
+        }
+    }
+
+    async function controlServer(action) {
+        if (!confirm(`Are you sure you want to ${action} the TAK Server?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/server/control/${action}`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert(data.message, 'success');
+                setTimeout(() => loadSystemStatus(), 2000);
+            } else {
+                showAlert(data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error controlling server:', error);
+            showAlert('Failed to control server', 'error');
+        }
+    }
+
+    // Load data on page load
+    loadSystemStatus();
+    loadDatabaseStats();
+
+    // Refresh status every 30 seconds
+    setInterval(loadSystemStatus, 30000);
+</script>
+{% endblock %}

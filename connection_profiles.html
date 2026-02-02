@@ -1,0 +1,589 @@
+{% extends "base.html" %}
+
+{% block title %}Connection Profiles - CoT Server Admin{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 2rem;">📱 Connection Profiles</h1>
+
+<!-- Server Info Card -->
+<div class="card">
+    <h2>🖥️ Server Information</h2>
+    <div id="serverInfo" class="loading">Loading server info...</div>
+</div>
+
+<!-- Generate Profile Card -->
+<div class="card">
+    <h2>🔧 Generate Connection Profile</h2>
+    <p style="color: #666; margin-bottom: 1.5rem;">
+        Create a connection profile package for TAK clients (ATAK, WinTAK, iTAK). 
+        The package includes connection settings and certificates for easy client setup.
+    </p>
+    
+    <div class="form-group">
+        <label for="clientSelect">Select Client Certificate:</label>
+        <select id="clientSelect" class="form-control">
+            <option value="">-- Select a certificate --</option>
+        </select>
+        <small style="color: #666;">
+            Need a new certificate? <a href="{{ url_for('certificates_page') }}">Generate one here</a>
+        </small>
+    </div>
+    
+    <div class="form-group">
+        <label>
+            <input type="checkbox" id="includeCert" checked>
+            Include certificate in profile package
+        </label>
+    </div>
+    
+    <div class="button-group">
+        <button class="btn btn-primary" onclick="generateProfile()">
+            📦 Generate Profile Package
+        </button>
+        {% if qr_available %}
+        <button class="btn btn-secondary" onclick="showQRCode()">
+            📱 Show QR Code
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- QR Code Display Card -->
+{% if qr_available %}
+<div class="card" id="qrCodeCard" style="display: none;">
+    <h2>📱 QR Code</h2>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Scan this QR code with a QR scanner app to get connection details.
+    </p>
+    <div id="qrCodeDisplay" style="text-align: center; padding: 2rem;">
+        <div class="loading">Generating QR code...</div>
+    </div>
+    <div id="qrConnectionInfo" style="margin-top: 1rem;"></div>
+</div>
+{% else %}
+<div class="card">
+    <h2>📱 QR Code</h2>
+    <div class="alert alert-warning">
+        QR code generation is not available. Install the <code>qrcode</code> Python library to enable this feature:
+        <pre style="margin-top: 0.5rem; background: #f5f5f5; padding: 0.5rem; border-radius: 4px;">pip install qrcode[pil] Pillow</pre>
+    </div>
+</div>
+{% endif %}
+
+<!-- Existing Profiles Card -->
+<div class="card">
+    <h2>📋 Generated Profiles</h2>
+    <div id="profilesList">
+        <div class="loading">Loading profiles...</div>
+    </div>
+</div>
+
+<!-- Instructions Card -->
+<div class="card">
+    <h2>📖 Installation Instructions</h2>
+    
+    <div class="instructions-tabs">
+        <button class="tab-btn active" onclick="showTab('atak')">ATAK (Android)</button>
+        <button class="tab-btn" onclick="showTab('wintak')">WinTAK (Windows)</button>
+        <button class="tab-btn" onclick="showTab('itak')">iTAK (iOS)</button>
+    </div>
+    
+    <div id="atak-tab" class="tab-content active">
+        <h3>📱 ATAK Installation</h3>
+        <ol>
+            <li>Download the profile package (.zip) to your Android device</li>
+            <li>Open ATAK</li>
+            <li>Go to <strong>Settings → Network Preferences → Manage Server Connections</strong></li>
+            <li>Tap <strong>Import</strong></li>
+            <li>Select the downloaded .zip file</li>
+            <li>Enter the certificate password when prompted</li>
+            <li>The connection should activate automatically</li>
+        </ol>
+    </div>
+    
+    <div id="wintak-tab" class="tab-content">
+        <h3>💻 WinTAK Installation</h3>
+        <ol>
+            <li>Download and extract the profile package</li>
+            <li>Open WinTAK</li>
+            <li>Go to <strong>Settings → Network Preferences</strong></li>
+            <li>Click <strong>Import Connection</strong></li>
+            <li>Select the .pref file from the extracted folder</li>
+            <li>When prompted, browse to and select the .p12 certificate file</li>
+            <li>Enter the certificate password</li>
+        </ol>
+    </div>
+    
+    <div id="itak-tab" class="tab-content">
+        <h3>🍎 iTAK Installation</h3>
+        <ol>
+            <li>Download the profile package</li>
+            <li>Extract and AirDrop or email the .p12 file to your iOS device</li>
+            <li>When the certificate profile appears, tap <strong>Install</strong></li>
+            <li>Enter the certificate password</li>
+            <li>Open iTAK</li>
+            <li>Go to <strong>Settings → Servers</strong></li>
+            <li>Add a new server with the connection details shown above</li>
+        </ol>
+    </div>
+</div>
+
+<style>
+    .server-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+    
+    .info-item {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+    }
+    
+    .info-item .label {
+        font-size: 0.85rem;
+        color: #666;
+        margin-bottom: 0.25rem;
+    }
+    
+    .info-item .value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #333;
+        font-family: monospace;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+    }
+    
+    .form-control {
+        width: 100%;
+        max-width: 400px;
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 1rem;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    }
+    
+    .button-group {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+    }
+    
+    .btn-secondary:hover {
+        background: #5a6268;
+    }
+    
+    .profile-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .profile-item:last-child {
+        border-bottom: none;
+    }
+    
+    .profile-item:hover {
+        background: #f8f9fa;
+    }
+    
+    .profile-icon {
+        font-size: 2rem;
+        margin-right: 1rem;
+    }
+    
+    .profile-info {
+        flex: 1;
+    }
+    
+    .profile-name {
+        font-weight: 600;
+    }
+    
+    .profile-meta {
+        font-size: 0.85rem;
+        color: #666;
+    }
+    
+    .profile-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .btn-icon {
+        padding: 0.5rem;
+        border: none;
+        background: #f0f0f0;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: all 0.2s;
+    }
+    
+    .btn-icon:hover {
+        background: #e0e0e0;
+    }
+    
+    .btn-icon.danger:hover {
+        background: #ffe0e0;
+        color: #d32f2f;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #888;
+    }
+    
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+    
+    .qr-code-container {
+        background: white;
+        padding: 1rem;
+        display: inline-block;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .qr-code-container img {
+        display: block;
+        max-width: 250px;
+    }
+    
+    .connection-string {
+        background: #f5f5f5;
+        padding: 1rem;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 0.9rem;
+        word-break: break-all;
+        margin-top: 1rem;
+    }
+    
+    .instructions-tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 0.5rem;
+    }
+    
+    .tab-btn {
+        padding: 0.5rem 1rem;
+        border: none;
+        background: #f0f0f0;
+        border-radius: 6px 6px 0 0;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .tab-btn.active {
+        background: #667eea;
+        color: white;
+    }
+    
+    .tab-content {
+        display: none;
+        padding: 1rem 0;
+    }
+    
+    .tab-content.active {
+        display: block;
+    }
+    
+    .tab-content ol {
+        margin-left: 1.5rem;
+    }
+    
+    .tab-content li {
+        margin-bottom: 0.5rem;
+        line-height: 1.6;
+    }
+    
+    .copy-btn {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        margin-left: 0.5rem;
+    }
+    
+    .copy-btn:hover {
+        background: #5a6fd6;
+    }
+</style>
+
+<script>
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        loadServerInfo();
+        loadProfiles();
+    });
+    
+    function loadServerInfo() {
+        fetch('/api/connection-profiles/server-info')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    renderServerInfo(data.info);
+                    populateCertSelect(data.info.available_certs);
+                }
+            })
+            .catch(err => {
+                document.getElementById('serverInfo').innerHTML = 
+                    '<div class="alert alert-error">Failed to load server info</div>';
+            });
+    }
+    
+    function renderServerInfo(info) {
+        const html = `
+            <div class="server-info-grid">
+                <div class="info-item">
+                    <div class="label">Server Address</div>
+                    <div class="value">${info.server_ip}</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">TAK Port (SSL)</div>
+                    <div class="value">${info.tak_port}</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Connection String</div>
+                    <div class="value">${info.server_ip}:${info.tak_port}:ssl</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Certificate Password</div>
+                    <div class="value">
+                        <span id="certPass" style="filter: blur(4px);">${info.cert_password}</span>
+                        <button class="copy-btn" onclick="togglePassword()">👁️ Show</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('serverInfo').innerHTML = html;
+    }
+    
+    function togglePassword() {
+        const el = document.getElementById('certPass');
+        const btn = el.nextElementSibling;
+        if (el.style.filter) {
+            el.style.filter = '';
+            btn.textContent = '🙈 Hide';
+        } else {
+            el.style.filter = 'blur(4px)';
+            btn.textContent = '👁️ Show';
+        }
+    }
+    
+    function populateCertSelect(certs) {
+        const select = document.getElementById('clientSelect');
+        certs.forEach(cert => {
+            const option = document.createElement('option');
+            option.value = cert;
+            option.textContent = cert;
+            select.appendChild(option);
+        });
+    }
+    
+    function generateProfile() {
+        const clientName = document.getElementById('clientSelect').value;
+        const includeCert = document.getElementById('includeCert').checked;
+        
+        if (!clientName) {
+            showAlert('Please select a client certificate', 'error');
+            return;
+        }
+        
+        fetch('/api/connection-profiles/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                client_name: clientName,
+                include_cert: includeCert
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(`Profile generated: ${data.filename}`, 'success');
+                loadProfiles();
+                
+                // Auto-download
+                window.location.href = `/api/connection-profiles/download/${data.filename}`;
+            } else {
+                showAlert(data.error || 'Failed to generate profile', 'error');
+            }
+        })
+        .catch(err => {
+            showAlert('Error generating profile', 'error');
+        });
+    }
+    
+    function showQRCode() {
+        const clientName = document.getElementById('clientSelect').value;
+        
+        if (!clientName) {
+            showAlert('Please select a client certificate', 'error');
+            return;
+        }
+        
+        const qrCard = document.getElementById('qrCodeCard');
+        const qrDisplay = document.getElementById('qrCodeDisplay');
+        const qrInfo = document.getElementById('qrConnectionInfo');
+        
+        qrCard.style.display = 'block';
+        qrDisplay.innerHTML = '<div class="loading">Generating QR code...</div>';
+        
+        fetch(`/api/connection-profiles/qr/${encodeURIComponent(clientName)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    qrDisplay.innerHTML = `
+                        <div class="qr-code-container">
+                            <img src="${data.qr_image}" alt="QR Code">
+                        </div>
+                        <p style="margin-top: 1rem; color: #666;">
+                            Scan with any QR scanner app
+                        </p>
+                    `;
+                    
+                    qrInfo.innerHTML = `
+                        <div class="connection-string">
+                            <strong>Connection Data:</strong><br>
+                            ${data.qr_data}
+                        </div>
+                    `;
+                    
+                    // Scroll to QR code
+                    qrCard.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    qrDisplay.innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+                }
+            })
+            .catch(err => {
+                qrDisplay.innerHTML = '<div class="alert alert-error">Failed to generate QR code</div>';
+            });
+    }
+    
+    function loadProfiles() {
+        fetch('/api/connection-profiles/list')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    renderProfiles(data.profiles);
+                }
+            });
+    }
+    
+    function renderProfiles(profiles) {
+        const container = document.getElementById('profilesList');
+        
+        if (profiles.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📱</div>
+                    <p>No connection profiles generated yet</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        profiles.forEach(profile => {
+            const date = new Date(profile.created).toLocaleString();
+            html += `
+                <div class="profile-item">
+                    <div class="profile-icon">📱</div>
+                    <div class="profile-info">
+                        <div class="profile-name">${profile.client_name}</div>
+                        <div class="profile-meta">${profile.size} • Created: ${date}</div>
+                    </div>
+                    <div class="profile-actions">
+                        <button class="btn-icon" onclick="downloadProfile('${profile.filename}')" title="Download">
+                            ⬇️
+                        </button>
+                        {% if qr_available %}
+                        <button class="btn-icon" onclick="showQRForClient('${profile.client_name}')" title="Show QR">
+                            📱
+                        </button>
+                        {% endif %}
+                        <button class="btn-icon danger" onclick="deleteProfile('${profile.filename}')" title="Delete">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+    
+    function downloadProfile(filename) {
+        window.location.href = `/api/connection-profiles/download/${encodeURIComponent(filename)}`;
+    }
+    
+    function showQRForClient(clientName) {
+        document.getElementById('clientSelect').value = clientName;
+        showQRCode();
+    }
+    
+    function deleteProfile(filename) {
+        if (!confirm('Delete this connection profile?')) {
+            return;
+        }
+        
+        fetch(`/api/connection-profiles/delete/${encodeURIComponent(filename)}`, {
+            method: 'DELETE'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Profile deleted', 'success');
+                loadProfiles();
+            } else {
+                showAlert(data.error || 'Delete failed', 'error');
+            }
+        });
+    }
+    
+    function showTab(tabId) {
+        // Hide all tabs
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Show selected tab
+        document.getElementById(tabId + '-tab').classList.add('active');
+        event.target.classList.add('active');
+    }
+</script>
+{% endblock %}

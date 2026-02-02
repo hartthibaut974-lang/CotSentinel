@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - CoT Server Admin{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>TAK Server Logs</h2>
+    <p style="color: #666; margin-bottom: 1rem;">
+        View real-time logs from the TAK Server service.
+    </p>
+
+    <div class="button-group" style="margin-bottom: 1rem;">
+        <button class="btn" onclick="loadLogs(50)">Last 50 lines</button>
+        <button class="btn" onclick="loadLogs(100)">Last 100 lines</button>
+        <button class="btn" onclick="loadLogs(500)">Last 500 lines</button>
+        <button class="btn btn-success" onclick="loadLogs(100)">🔄 Refresh</button>
+    </div>
+
+    <div id="logs-loading" class="loading">Loading logs...</div>
+    
+    <div id="logs-content" style="display: none;">
+        <div style="background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem; max-height: 600px; overflow-y: auto;">
+            <pre id="logs-output" style="margin: 0; white-space: pre-wrap; word-wrap: break-word;"></pre>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Log Filtering</h2>
+    <div class="form-group">
+        <label for="log-filter">Filter logs (case-insensitive)</label>
+        <input type="text" id="log-filter" placeholder="Enter text to filter logs...">
+    </div>
+    <button class="btn" onclick="applyFilter()">Apply Filter</button>
+</div>
+
+<div class="card">
+    <h2>Log Management</h2>
+    <div class="button-group">
+        <button class="btn btn-secondary" onclick="downloadLogs()">⬇️ Download Logs</button>
+        <button class="btn btn-danger" onclick="clearLogs()">🗑️ Clear Logs</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let allLogs = '';
+    let autoRefresh = null;
+
+    async function loadLogs(lines = 100) {
+        try {
+            const response = await fetch(`/api/logs?lines=${lines}`);
+            const data = await response.json();
+
+            if (data.success) {
+                allLogs = data.logs;
+                displayLogs(allLogs);
+
+                document.getElementById('logs-loading').style.display = 'none';
+                document.getElementById('logs-content').style.display = 'block';
+            } else {
+                showAlert('Failed to load logs: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error loading logs:', error);
+            showAlert('Failed to load logs', 'error');
+        }
+    }
+
+    function displayLogs(logs) {
+        const output = document.getElementById('logs-output');
+        
+        // Color code log levels
+        let coloredLogs = logs
+            .replace(/ERROR/g, '<span style="color: #f48771;">ERROR</span>')
+            .replace(/WARN/g, '<span style="color: #dcdcaa;">WARN</span>')
+            .replace(/INFO/g, '<span style="color: #4ec9b0;">INFO</span>')
+            .replace(/DEBUG/g, '<span style="color: #9cdcfe;">DEBUG</span>');
+
+        output.innerHTML = coloredLogs;
+        
+        // Auto-scroll to bottom
+        output.parentElement.scrollTop = output.parentElement.scrollHeight;
+    }
+
+    function applyFilter() {
+        const filter = document.getElementById('log-filter').value.toLowerCase();
+        
+        if (!filter) {
+            displayLogs(allLogs);
+            return;
+        }
+
+        const lines = allLogs.split('\n');
+        const filtered = lines.filter(line => 
+            line.toLowerCase().includes(filter)
+        ).join('\n');
+
+        displayLogs(filtered || 'No logs matching filter');
+    }
+
+    function toggleAutoRefresh() {
+        if (autoRefresh) {
+            clearInterval(autoRefresh);
+            autoRefresh = null;
+            showAlert('Auto-refresh disabled', 'info');
+        } else {
+            autoRefresh = setInterval(() => loadLogs(100), 10000);
+            showAlert('Auto-refresh enabled (every 10 seconds)', 'success');
+        }
+    }
+
+    function downloadLogs() {
+        const blob = new Blob([allLogs], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `takserver-logs-${new Date().toISOString()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        showAlert('Logs downloaded', 'success');
+    }
+
+    function clearLogs() {
+        if (!confirm('Are you sure you want to clear the TAK Server logs? This action cannot be undone.')) {
+            return;
+        }
+        showAlert('Log clearing functionality coming soon', 'info');
+    }
+
+    // Filter as you type
+    document.getElementById('log-filter').addEventListener('input', applyFilter);
+
+    // Load logs on page load
+    loadLogs(100);
+
+    // Enable auto-refresh by default
+    autoRefresh = setInterval(() => loadLogs(100), 10000);
+</script>
+{% endblock %}
